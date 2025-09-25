@@ -1,6 +1,7 @@
 from fastapi import HTTPException
-from .framework_extentions import extension_mapping
+from .framework_extentions import extension_mapping, get_clean_framework_name
 from app.open_router import ask_openrouter
+
 
 
 def validate_model_zip(extracted_files):
@@ -17,13 +18,15 @@ def validate_model_zip(extracted_files):
     model_files_found = []
     model_frameworks = {}
 
+    detected_frameworks = set()  # Use set to avoid duplicates
+    
     for file in extracted_files:
         if file.endswith(KNOWN_MODEL_EXTENSIONS):
             model_files_found.append(file)
             # განვსაზღვროთ რომელ framework ეკუთვის ფაილი
             for ext, framework in extension_mapping.items():
                 if file.lower().endswith(ext):
-                    model_frameworks[file] = framework
+                    detected_frameworks.add(framework)
                     break
 
     if not model_files_found:
@@ -38,7 +41,22 @@ def validate_model_zip(extracted_files):
             detail = f"No model files found and AI check failed: {str(e)}"
         raise HTTPException(status_code=400, detail=detail)
 
-    return model_frameworks
+    # Return single framework name or handle multiple frameworks
+    if len(detected_frameworks) == 0:
+        return None
+    
+    # Clean up framework names
+    cleaned_frameworks = get_clean_framework_name(detected_frameworks)
+    
+    if len(cleaned_frameworks) == 1:
+        return list(cleaned_frameworks)[0]
+    else:
+        # If multiple frameworks detected, return the primary one or combined name
+        frameworks_list = sorted(list(cleaned_frameworks))  # Sort for consistency
+        if len(frameworks_list) <= 2:
+            return " + ".join(frameworks_list)
+        else:
+            return f"Multi-framework ({len(frameworks_list)} types)"
 
 
 def validate_model_with_ai(file_contents: str, description: str, model_setup: str):
@@ -80,25 +98,34 @@ def validate_model_with_ai(file_contents: str, description: str, model_setup: st
 
         # Try to parse JSON response
         import json
+        import re
+        
+        # Clean the response - remove markdown code blocks if present
+        cleaned_response = ai_response.strip()
+        # Remove ```json and ``` if present
+        cleaned_response = re.sub(r'^```json\s*', '', cleaned_response, flags=re.MULTILINE)
+        cleaned_response = re.sub(r'\s*```$', '', cleaned_response, flags=re.MULTILINE)
+        cleaned_response = cleaned_response.strip()
+        
         try:
-            parsed = json.loads(ai_response.strip())
+            parsed = json.loads(cleaned_response)
         except json.JSONDecodeError:
             return {
                 "status": "INVALID",
-                "reason": f"AI did not return valid JSON: {ai_response}"
+                "reason": "AI validation failed - invalid response format"
             }
 
         # Validate required keys
         if "status" not in parsed:
             return {
                 "status": "INVALID",
-                "reason": f"Missing 'status' in AI response: {parsed}"
+                "reason": "AI validation error - missing status"
             }
 
         return parsed
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"An error occurred during AI validation: {str(e)}"
-        )
+        return {
+            "status": "ERROR",
+            "reason": "AI validation service temporarily unavailable"
+        }

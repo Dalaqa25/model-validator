@@ -22,7 +22,7 @@ async def model_upload(
     logger.info(f"Description: {description}")
     
     # Check for .zip format
-    if not file.filename.lower().endswith(".zip"):
+    if not file.filename or not file.filename.lower().endswith(".zip"):
         logger.error("Upload failed: Only .zip files are allowed.")
         raise HTTPException(status_code=400, detail="Only .zip files are allowed")
     
@@ -32,8 +32,8 @@ async def model_upload(
         # Perform initial validation (file types, extensions)
         logger.info("Performing initial file validation...")
         extracted_files_list = utils.list_zip_contents(contents)
-        validate_model_zip(extracted_files_list)
-        logger.info("Initial validation successful.")
+        framework_used = validate_model_zip(extracted_files_list)
+        logger.info(f"Initial validation successful. Detected framework: {framework_used}")
 
         # Extract content for AI validation
         logger.info("Extracting file contents for AI validation...")
@@ -44,7 +44,16 @@ async def model_upload(
         ai_result = validate_model_with_ai(file_contents, description, model_setUp)
         logger.info(f"AI validation finished. Result: {ai_result['status']}")
 
-        return ai_result
+        # Include detected framework in the response
+        response = {
+            "status": ai_result.get("status"),
+            "reason": ai_result.get("reason"),
+            "framework_used": framework_used
+        }
+        # Remove None values
+        response = {k: v for k, v in response.items() if v is not None}
+
+        return response
 
     except HTTPException as e:
         logger.error(f"Validation failed: {e.detail}")

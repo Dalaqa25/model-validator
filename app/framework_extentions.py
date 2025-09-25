@@ -46,3 +46,39 @@ extension_mapping = {
     '.xml': 'OpenVINO (Intel)',
     '.engine': 'TensorRT (NVIDIA)',
 }
+
+
+def get_clean_framework_name(frameworks_set):
+    """Convert verbose framework names to clean, frontend-friendly names"""
+    framework_mapping = {
+        'PyTorch': 'PyTorch',
+        'TensorFlow (Frozen Graph)': 'TensorFlow',
+        'TensorFlow/Keras (HDF5)': 'TensorFlow',
+        'TensorFlow Lite': 'TensorFlow Lite',
+        'TensorFlow.js': 'TensorFlow.js',
+        'ONNX (Cross-platform)': 'ONNX',
+        'Scikit-learn/Python Pickle': 'Scikit-learn',
+        'Scikit-learn/Joblib': 'Scikit-learn',
+        'JAX/Flax (MessagePack)': 'JAX/Flax',
+        'Apple Core ML': 'Core ML',
+        'Caffe': 'Caffe',
+        'Caffe (Architecture)': 'Caffe',
+        'MXNet (Parameters)': 'MXNet',
+        'MXNet (Symbol) / General JSON': 'MXNet',
+        'PaddlePaddle (Parameters)': 'PaddlePaddle',
+        'PaddlePaddle (Model)': 'PaddlePaddle',
+        'SafeTensors (Hugging Face)': 'Hugging Face',
+        'PyTorch/Hugging Face Binary': 'PyTorch',
+        'GGML (llama.cpp)': 'GGML',
+        'GGUF (llama.cpp)': 'GGUF',
+        'GGML Quantized (llama.cpp)': 'GGML',
+        'OpenVINO (Intel)': 'OpenVINO',
+        'TensorRT (NVIDIA)': 'TensorRT'
+    }
+    
+    cleaned_frameworks = set()
+    for framework in frameworks_set:
+        cleaned_name = framework_mapping.get(framework, framework)
+        cleaned_frameworks.add(cleaned_name)
+    
+    return cleaned_frameworks
