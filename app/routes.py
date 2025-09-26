@@ -44,11 +44,12 @@ async def model_upload(
         ai_result = validate_model_with_ai(file_contents, description, model_setUp)
         logger.info(f"AI validation finished. Result: {ai_result['status']}")
 
-        # Include detected framework in the response
+        # Include detected framework and task type in the response
         response = {
             "status": ai_result.get("status"),
             "reason": ai_result.get("reason"),
-            "framework_used": framework_used
+            "framework_used": framework_used,
+            "task_detection": ai_result.get("task_detection", {})
         }
         # Remove None values
         response = {k: v for k, v in response.items() if v is not None}
