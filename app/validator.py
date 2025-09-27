@@ -197,7 +197,7 @@ def validate_model_with_ai(file_contents: str, description: str, model_setup: st
     Analyze the relationship between what the user claims and what the files actually contain.
     Focus on whether their description makes sense given the actual model files.
     
-    Respond with JSON only: {{"status": "VALID"}} or {{"status": "INVALID", "reason": "specific mismatch explanation"}}
+    Respond with JSON only: {{"status": "VALID", "reason": "specific validation explanation"}} or {{"status": "INVALID", "reason": "specific mismatch explanation"}}
     """
 
     try:
@@ -231,6 +231,16 @@ def validate_model_with_ai(file_contents: str, description: str, model_setup: st
 
         # Include task detection results
         parsed["task_detection"] = task_detection
+        # Ensure validation_status is included for consistency
+        parsed["validation_status"] = parsed.get("status")
+        
+        # Ensure a reason is always included
+        if "reason" not in parsed:
+            if parsed.get("status") == "VALID":
+                parsed["reason"] = "Model validation successful. The description and setup instructions match the uploaded model files."
+            else:
+                parsed["reason"] = "Validation status unclear."
+        
         return parsed
 
     except Exception as e:
