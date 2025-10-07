@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-@router.post("/model-upload")
+@router.post("/upload")
 async def model_upload(
     file: UploadFile = File(...),
     model_name: str = Form(...),
@@ -27,17 +27,22 @@ async def model_upload(
         raise HTTPException(status_code=400, detail="Only .zip files are allowed")
     
     contents = await file.read()
-
+    
     try:
+        # Clean the zip file before validation
+        logger.info("Cleaning the uploaded zip file...")
+        cleaned_contents = utils.clean_zip_file(contents)
+        logger.info("Zip file cleaning successful.")
+
         # Perform initial validation (file types, extensions)
         logger.info("Performing initial file validation...")
-        extracted_files_list = utils.list_zip_contents(contents)
+        extracted_files_list = utils.list_zip_contents(cleaned_contents)
         framework_used = validate_model_zip(extracted_files_list)
         logger.info(f"Initial validation successful. Detected framework: {framework_used}")
 
         # Extract content for AI validation
         logger.info("Extracting file contents for AI validation...")
-        file_contents = utils.extract_zip_contents(contents)
+        file_contents = utils.extract_zip_contents(cleaned_contents)
 
         # Perform AI validation
         logger.info("Performing AI validation...")

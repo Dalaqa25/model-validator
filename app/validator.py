@@ -13,51 +13,18 @@ def detect_task_type(description: str, model_setup: str, file_contents: str) -> 
     """
     
     prompt = f"""
-    You are a STRICT task type detector. Your job is to determine if the model files clearly match one of the predefined task types.
-    
-    ### STRICT RULES:
-    1. **ONLY** return a task type if you can clearly identify it from the actual model files
-    2. **DO NOT GUESS** - if uncertain, return "no_task_found"
-    3. **DO NOT HALLUCINATE** - only use evidence from the actual files
-    4. **IGNORE** vague descriptions - focus on file contents only
-    5. **BE BINARY** - either it clearly matches or it doesn't
-    
-    ### Available Task Types:
-    {', '.join(TASK_TYPES)}
-    
-    ### Analysis Process:
-    1. Examine the model files (code, architecture, imports)
-    2. Look for clear indicators of specific tasks
-    3. If you can definitively identify the task → return it
-    4. If unclear, uncertain, or no clear match → return "no_task_found"
-    
-    ### Examples of CLEAR matches:
-    - CNN with image inputs → "image-classification" 
-    - Transformer with text tokenization → "text-generation"
-    - YOLO architecture → "object-detection"
-    - Audio processing with speech → "speech-to-text"
-    
-    ### Examples of NO CLEAR MATCH:
-    - Generic neural network without clear purpose
-    - Empty or template files
-    - Configuration files only
-    - Unclear architecture
-    
-    ### Current Files to Analyze:
-    ```
-    {file_contents[:2000]}
-    ```
-    
-    ### Your Decision:
-    Analyze ONLY the file contents. Ignore the user description completely.
-    
-    Return JSON: {{"task_type": "specific-task-type"}} or {{"task_type": "no_task_found"}}
-    No confidence levels, no reasoning, no uncertainty - just binary detection.
+    Analyze the model code and return the task type from: {', '.join(TASK_TYPES)}
+
+    Code:
+    {file_contents[:1500]}
+
+    Return JSON: {{"task_type": "task-type"}} or {{"task_type": "no_task_found"}}
     """
 
     try:
         ai_response = ask_openrouter(prompt)
-        
+        print(f"DEBUG: AI response for task detection: {ai_response}")
+
         # Clean the response
         cleaned_response = ai_response.strip()
         cleaned_response = re.sub(r'^```json\s*', '', cleaned_response, flags=re.MULTILINE)
@@ -91,12 +58,7 @@ def detect_task_type(description: str, model_setup: str, file_contents: str) -> 
 
 
 def validate_model_zip(extracted_files):
-    # ------ მარტივი ფაილის ვალიდაციები ------
-    # მავნე გაფრთოებების შემოწმება
-    BAD_MODEL_EXTENSIONS = (".exe", ".bat", ".cmd", ".sh", ".vbs", ".ps1", ".msi", ".tar", ".rar")
-    for file in extracted_files:
-        if file.endswith(BAD_MODEL_EXTENSIONS):
-            raise HTTPException(status_code=400, detail=f"Bad file found: {file}")
+    # File cleaning is now handled in routes.py
 
     # შევამოწმოთ ფაილი შეიცავს თუ არა მოდელის ფორმატებს
     KNOWN_MODEL_EXTENSIONS = tuple(extension_mapping.keys())
@@ -154,57 +116,25 @@ def validate_model_with_ai(file_contents: str, description: str, model_setup: st
     # Get task detection first for context
     task_detection = detect_task_type(description, model_setup, file_contents)
     
-    # Enhanced AI validation prompt - focuses on intelligent comparison
     prompt = f"""
-    You are an expert AI model validator. Your job is to intelligently analyze if the user's description and setup instructions match the actual model files they uploaded.
-    
-    ### Your Analysis Process:
-    1. **Examine the actual model files** - Look at file structure, code, architecture, imports, etc.
-    2. **Understand the user's intent** - What do they claim this model does? 
-    3. **Compare intelligently** - Does their description align with what the files actually contain?
-    4. **Consider context** - Even brief descriptions can be valid if they match the files
-    
-    ### Validation Rules:
-    - ✅ **VALID**: If description/setup reasonably matches the file contents (even if brief)
-    - ✅ **VALID**: If the user's intent aligns with what the model actually does  
-    - ✅ **VALID**: If setup instructions work with the provided files
-    - ❌ **INVALID**: Only if there's a clear mismatch between claims and reality
-    - ❌ **INVALID**: If description claims functionality not present in files
-    - ❌ **INVALID**: If setup instructions won't work with these files
-    
-    ### Examples:
-    - Description: "image classifier" + Files: CNN model → **VALID** (matches)
-    - Description: "adsada" + Files: working PyTorch model → **INVALID** (no meaningful connection)
-    - Description: "text generator" + Files: image processing code → **INVALID** (mismatch)
-    - Description: "model" + Files: complete working model → **VALID** (brief but accurate)
-    
-    ### Current Analysis:
-    
-    **Detected Task Type:** {task_detection}
-    
-    **User's Description:**
-    "{description}"
-    
-    **User's Setup Instructions:**
-    "{model_setup}"
-    
-    **Actual Model Files Content:**
-    ```
-    {file_contents[:3000]}
-    ```
-    
-    ### Your Decision:
-    Analyze the relationship between what the user claims and what the files actually contain.
-    Focus on whether their description makes sense given the actual model files.
-    
-    Respond with JSON only: {{"status": "VALID", "reason": "specific validation explanation"}} or {{"status": "INVALID", "reason": "specific mismatch explanation"}}
+    Validate if the description matches the model files.
+
+    Task: {task_detection}
+    Description: {description}
+    Setup: {model_setup}
+
+    Files:
+    {file_contents[:2000]}
+
+    Return JSON: {{"status": "VALID", "reason": "explanation"}} or {{"status": "INVALID", "reason": "explanation"}}
     """
 
     try:
         ai_response = ask_openrouter(prompt)
+        print(f"DEBUG: AI response for validation: {ai_response}")
 
         # Try to parse JSON response
-        
+
         # Clean the response - remove markdown code blocks if present
         cleaned_response = ai_response.strip()
         # Remove ```json and ``` if present

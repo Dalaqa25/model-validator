@@ -46,3 +46,22 @@ def extract_zip_contents(file_bytes: bytes, max_total_size: int = 100000) -> str
                     print(f"Could not read file {file_info.filename}: {e}")
 
     return full_content
+
+def clean_zip_file(file_bytes: bytes) -> bytes:
+    """
+    Cleans a zip file by removing disallowed files and folders.
+    """
+    BAD_FOLDERS = ("__MACOSX", "venv", ".venv", "node_modules")
+    BAD_EXTENSIONS = (".exe", ".bat", ".cmd", ".sh", ".vbs", ".ps1", ".msi")
+
+    in_memory_zip = io.BytesIO(file_bytes)
+    out_memory_zip = io.BytesIO()
+
+    with zipfile.ZipFile(in_memory_zip, 'r') as zip_in, zipfile.ZipFile(out_memory_zip, 'w') as zip_out:
+        for item in zip_in.infolist():
+            # Check if the file is in a disallowed folder or has a disallowed extension
+            if not any(part in BAD_FOLDERS for part in item.filename.split('/')) and not item.filename.lower().endswith(BAD_EXTENSIONS):
+                zip_out.writestr(item, zip_in.read(item.filename))
+
+    out_memory_zip.seek(0)
+    return out_memory_zip.getvalue()

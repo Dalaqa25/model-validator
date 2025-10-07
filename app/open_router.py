@@ -1,5 +1,5 @@
 
-from openai import OpenAI
+from openai import OpenAI, APITimeoutError
 from dotenv import load_dotenv
 import os
 
@@ -14,14 +14,20 @@ client = OpenAI(
     api_key=api_key,
 )
 
-def ask_openrouter(prompt: str, model: str = "mistralai/mistral-small-3.2-24b-instruct:free") -> str:
+def ask_openrouter(prompt: str, model: str = "qwen/qwen3-235b-a22b:free") -> str:
     """Send a prompt to OpenRouter and return the model's response."""
-    completion = client.chat.completions.create(
-        extra_headers={
-            "HTTP-Referer": "http://localhost:8000",  # update later with your site URL
-            "X-Title": "Model Validator",
-        },
-        model=model,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return completion.choices[0].message.content
+    try:
+        completion = client.chat.completions.create(
+            extra_headers={
+                "HTTP-Referer": "http://localhost:8000",  # update later with your site URL
+                "X-Title": "Model Validator",
+            },
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            timeout=30.0,  # Add a 30-second timeout
+        )
+        return completion.choices[0].message.content
+    except APITimeoutError:
+        return "The request to the AI service timed out. Please try again later."
+    except Exception as e:
+        return f"An error occurred while communicating with the AI service: {str(e)}"
