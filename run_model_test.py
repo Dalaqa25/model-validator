@@ -5,7 +5,7 @@ def run_test():
     """
     Sends a POST request to the model validator with a sample model and random data.
     """
-    url = "http://localhost:8000/api/models/upload"
+    url = "http://localhost:8000/api/models/model-upload"
     model_path = "simple_model.zip"
 
     if not os.path.exists(model_path):

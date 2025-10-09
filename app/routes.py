@@ -2,6 +2,8 @@ from fastapi import APIRouter, UploadFile, File, HTTPException, Form
 from app import utils
 from app.validator import validate_model_zip, validate_model_with_ai
 import logging
+import httpx
+import json
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -9,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-@router.post("/upload")
+@router.post("/model-upload")
 async def model_upload(
     file: UploadFile = File(...),
     model_name: str = Form(...),
@@ -48,6 +50,28 @@ async def model_upload(
         logger.info("Performing AI validation...")
         ai_result = validate_model_with_ai(file_contents, description, model_setUp)
         logger.info(f"AI validation finished. Result: {ai_result['status']}")
+
+        # If valid, forward the ZIP file and full JSON response to the other server
+        if ai_result['status'] == 'VALID':
+            # Build the full response JSON
+            full_response = {
+                "status": ai_result.get("status"),
+                "reason": ai_result.get("reason"),
+                "framework_used": framework_used,
+                "task_detection": ai_result.get("task_detection", {})
+            }
+            try:
+                logger.info("Sending ZIP file and full JSON to 127.0.0.1:8001/upload/")
+                async with httpx.AsyncClient() as client:
+                    files = {'file': ('model.zip', cleaned_contents, 'application/zip')}
+                    data = {'text': json.dumps(full_response)}
+                    response = await client.post("http://127.0.0.1:8001/upload/", files=files, data=data)
+                    if response.status_code == 200:
+                        logger.info("Successfully sent ZIP file and full JSON to 127.0.0.1:8001/upload/")
+                    else:
+                        logger.error(f"Failed to send ZIP file and full JSON. Status: {response.status_code}, Reason: {response.text}")
+            except Exception as e:
+                logger.error(f"Error forwarding ZIP file and full JSON: {str(e)}")
 
         # Include detected framework and task type in the response
         response = {

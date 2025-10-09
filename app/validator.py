@@ -27,6 +27,7 @@ def detect_task_type(description: str, model_setup: str, file_contents: str) -> 
 
         # Clean the response
         cleaned_response = ai_response.strip()
+        cleaned_response = re.sub(r'<think>.*?</think>', '', cleaned_response, flags=re.DOTALL)
         cleaned_response = re.sub(r'^```json\s*', '', cleaned_response, flags=re.MULTILINE)
         cleaned_response = re.sub(r'\s*```$', '', cleaned_response, flags=re.MULTILINE)
         cleaned_response = cleaned_response.strip()
@@ -135,8 +136,10 @@ def validate_model_with_ai(file_contents: str, description: str, model_setup: st
 
         # Try to parse JSON response
 
-        # Clean the response - remove markdown code blocks if present
+        # Clean the response - remove markdown code blocks and thinking tags if present
         cleaned_response = ai_response.strip()
+        # Remove <think> tags
+        cleaned_response = re.sub(r'<think>.*?</think>', '', cleaned_response, flags=re.DOTALL)
         # Remove ```json and ``` if present
         cleaned_response = re.sub(r'^```json\s*', '', cleaned_response, flags=re.MULTILINE)
         cleaned_response = re.sub(r'\s*```$', '', cleaned_response, flags=re.MULTILINE)
