@@ -1,6 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Form
 from app import utils
 from app.validator import validate_model_zip, validate_model_with_ai
+from app.runners.runner_manager import RunnerManager
 import logging
 import httpx
 import json
@@ -10,6 +11,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Initialize runner manager
+runner_manager = RunnerManager()
 
 @router.post("/model-upload")
 async def model_upload(
@@ -51,6 +55,14 @@ async def model_upload(
         ai_result = validate_model_with_ai(file_contents, description, model_setUp)
         logger.info(f"AI validation finished. Result: {ai_result['status']}")
 
+        # Perform model execution testing
+        logger.info("Performing model execution testing...")
+        execution_results = runner_manager.test_model_execution(cleaned_contents, framework_used)
+        logger.info(f"Execution testing finished. Success: {execution_results['execution_test']['success']}")
+
+        # Get clean execution summary for frontend
+        execution_summary = runner_manager.get_execution_summary(execution_results)
+
         # If valid, forward the ZIP file and full JSON response to the other server
         if ai_result['status'] == 'VALID':
             # Build the full response JSON
@@ -58,7 +70,8 @@ async def model_upload(
                 "status": ai_result.get("status"),
                 "reason": ai_result.get("reason"),
                 "framework_used": framework_used,
-                "task_detection": ai_result.get("task_detection", {})
+                "task_detection": ai_result.get("task_detection", {}),
+                "execution_test": execution_summary
             }
             try:
                 logger.info("Sending ZIP file and full JSON to 127.0.0.1:8001/upload/")
@@ -73,12 +86,13 @@ async def model_upload(
             except Exception as e:
                 logger.error(f"Error forwarding ZIP file and full JSON: {str(e)}")
 
-        # Include detected framework and task type in the response
+        # Include detected framework, task type, and execution results in the response
         response = {
             "status": ai_result.get("status"),
             "reason": ai_result.get("reason"),
             "framework_used": framework_used,
-            "task_detection": ai_result.get("task_detection", {})
+            "task_detection": ai_result.get("task_detection", {}),
+            "execution_test": execution_summary
         }
         # Remove None values
         response = {k: v for k, v in response.items() if v is not None}
