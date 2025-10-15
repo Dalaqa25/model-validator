@@ -82,14 +82,21 @@ async def model_upload(
                     template_id = template_validation['template_validation']['template_id']
                     logger.info(f"All validations passed. Uploading model to Supabase storage...")
                     
-                    storage_result = template_matcher.upload_model_to_storage(cleaned_contents, model_name, template_id)
+                    # Pass the original filename to match Next.js pattern
+                    storage_result = template_matcher.upload_model_to_storage(
+                        cleaned_contents, 
+                        model_name, 
+                        template_id, 
+                        original_filename=file.filename
+                    )
                     
                     if storage_result['upload_success']:
                         logger.info(f"Model successfully uploaded to storage: {storage_result['storage_path']}")
-                        # Add storage info to AI result
+                        # Add comprehensive storage info to AI result (matching Next.js pattern)
                         ai_result['storage_upload'] = {
                             "success": True,
                             "storage_path": storage_result['storage_path'],
+                            "file_storage_info": storage_result['file_storage_info'],  # Complete file metadata
                             "template_id": template_id
                         }
                     else:

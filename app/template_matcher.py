@@ -136,21 +136,24 @@ class TemplateMatcher:
         
         return result
     
-    def upload_model_to_storage(self, zip_contents: bytes, model_name: str, template_id: str) -> Dict[str, Any]:
+    def upload_model_to_storage(self, zip_contents: bytes, model_name: str, template_id: str, original_filename: str = None) -> Dict[str, Any]:
         """
         Upload the validated model to Supabase storage bucket 'models'.
+        Follows the same pattern as the Next.js implementation.
         
         Args:
             zip_contents (bytes): The ZIP file contents to upload
             model_name (str): Name of the model for storage
             template_id (str): The template ID that was matched
+            original_filename (str): Original filename (e.g., "my-model.zip")
             
         Returns:
-            Dict[str, Any]: Upload results
+            Dict[str, Any]: Upload results with comprehensive file storage info
         """
         result = {
             "upload_success": False,
             "storage_path": None,
+            "file_storage_info": None,
             "error": None,
             "user_friendly_message": None,
             "suggestions": []
@@ -166,33 +169,71 @@ class TemplateMatcher:
             return result
         
         try:
-            # Generate a unique filename for storage
-            import uuid
+            # Generate filename following Next.js pattern: timestamp-original-filename
             import time
+            from datetime import datetime
             
-            timestamp = int(time.time())
-            unique_id = str(uuid.uuid4())[:8]
-            safe_model_name = "".join(c for c in model_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
-            safe_model_name = safe_model_name.replace(' ', '_')
+            timestamp = int(time.time() * 1000)  # Use milliseconds like Date.now() in JS
             
-            storage_filename = f"{safe_model_name}_{timestamp}_{unique_id}.zip"
+            # Use original filename if provided, otherwise use model_name with .zip extension
+            if original_filename:
+                file_name = original_filename
+            else:
+                file_name = f"{model_name}.zip" if not model_name.endswith('.zip') else model_name
             
-            logger.info(f"Uploading model to storage: {storage_filename}")
+            # Create storage path following Next.js pattern
+            storage_path = f"{timestamp}-{file_name}"
             
-            # Upload to Supabase storage bucket 'models'
+            logger.info(f"Uploading model to storage: {storage_path}")
+            
+            # Upload to Supabase storage bucket 'models' with same options as Next.js
             response = self.supabase.storage.from_("models").upload(
-                path=storage_filename,
+                path=storage_path,
                 file=zip_contents,
                 file_options={
                     "content-type": "application/zip",
+                    "cacheControl": "3600",  # Match Next.js parameter name
                     "upsert": False  # Don't overwrite existing files
                 }
             )
             
             if response:
                 result["upload_success"] = True
-                result["storage_path"] = storage_filename
-                logger.info(f"Successfully uploaded model to storage: {storage_filename}")
+                result["storage_path"] = storage_path
+                
+                # Create file storage info object matching Next.js pattern
+                file_storage_info = {
+                    "type": "zip",
+                    "fileName": file_name,                    # Original filename
+                    "fileSize": len(zip_contents),            # File size in bytes
+                    "mimeType": "application/zip",            # MIME type
+                    "supabasePath": storage_path,             # Path in Supabase storage
+                    "uploadedAt": datetime.now().isoformat() + "Z"  # Upload timestamp (ISO format)
+                }
+                
+                result["file_storage_info"] = file_storage_info
+                logger.info(f"Successfully uploaded model to storage: {storage_path}")
+
+                # Persist file storage info into 'models' table
+                try:
+                    db_payload = {
+                        "file_storage": file_storage_info,
+                        "model_name": model_name,
+                        "template_id": template_id,
+                    }
+                    db_response = self.supabase.table("models").insert(db_payload).execute()
+                    # Supabase python client returns an object with .data
+                    if getattr(db_response, "data", None) and len(db_response.data) > 0:
+                        created = db_response.data[0]
+                        result["db_saved"] = True
+                        result["model_id"] = created.get("id")
+                    else:
+                        result["db_saved"] = False
+                        result["db_error"] = "Empty response from database insert"
+                except Exception as db_e:
+                    logger.error(f"Failed to save file_storage into models table: {str(db_e)}")
+                    result["db_saved"] = False
+                    result["db_error"] = str(db_e)
             else:
                 result["error"] = "Upload response was empty"
                 result["user_friendly_message"] = "Failed to upload model to storage"
