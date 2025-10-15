@@ -63,53 +63,63 @@ class RunnerManager:
             }
         }
         
+        temp_zip_path = None
+        compatible_runner = None
+        
         try:
             # Create temporary file for the zip
             with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as temp_file:
                 temp_file.write(zip_contents)
                 temp_zip_path = temp_file.name
             
-            try:
-                # Find compatible runner
-                compatible_runner = self.find_compatible_runner(temp_zip_path)
-                
-                if not compatible_runner:
-                    results["execution_test"]["error"] = f"No compatible runner found for framework: {framework_used}"
-                    return results
-                
-                # Check if framework matches
-                framework_matched = (
-                    compatible_runner.framework_name.lower() in framework_used.lower() or
-                    framework_used.lower() in compatible_runner.framework_name.lower()
-                )
-                results["execution_test"]["framework_matched"] = framework_matched
-                
-                # Run the full test
-                logger.info(f"Testing model execution with {compatible_runner.framework_name} runner")
-                test_results = compatible_runner.run_full_test(temp_zip_path)
-                
-                results["execution_test"]["runner_used"] = compatible_runner.framework_name
-                results["execution_test"]["test_results"] = test_results
-                results["execution_test"]["success"] = test_results.get("success", False)
-                
-                # Pass through error information if test failed
-                if not test_results.get("success", False):
-                    results["execution_test"]["error"] = test_results.get("error")
-                    results["execution_test"]["error_category"] = test_results.get("error_category")
-                    results["execution_test"]["user_friendly_message"] = test_results.get("user_friendly_message")
-                    results["execution_test"]["suggestions"] = test_results.get("suggestions", [])
-                
-                # Cleanup
-                compatible_runner.cleanup()
-                
-            finally:
-                # Clean up temporary file
-                if os.path.exists(temp_zip_path):
-                    os.unlink(temp_zip_path)
+            # Find compatible runner
+            compatible_runner = self.find_compatible_runner(temp_zip_path)
+            
+            if not compatible_runner:
+                results["execution_test"]["error"] = f"No compatible runner found for framework: {framework_used}"
+                return results
+            
+            # Check if framework matches
+            framework_matched = (
+                compatible_runner.framework_name.lower() in framework_used.lower() or
+                framework_used.lower() in compatible_runner.framework_name.lower()
+            )
+            results["execution_test"]["framework_matched"] = framework_matched
+            
+            # Run the full test
+            logger.info(f"Testing model execution with {compatible_runner.framework_name} runner")
+            test_results = compatible_runner.run_full_test(temp_zip_path)
+            
+            results["execution_test"]["runner_used"] = compatible_runner.framework_name
+            results["execution_test"]["test_results"] = test_results
+            results["execution_test"]["success"] = test_results.get("success", False)
+            
+            # Pass through error information if test failed
+            if not test_results.get("success", False):
+                results["execution_test"]["error"] = test_results.get("error")
+                results["execution_test"]["error_category"] = test_results.get("error_category")
+                results["execution_test"]["user_friendly_message"] = test_results.get("user_friendly_message")
+                results["execution_test"]["suggestions"] = test_results.get("suggestions", [])
                 
         except Exception as e:
             logger.error(f"Error during model execution testing: {str(e)}")
             results["execution_test"]["error"] = str(e)
+            
+        finally:
+            # Ensure cleanup happens even if exceptions occur
+            if compatible_runner:
+                try:
+                    compatible_runner.cleanup()
+                except Exception as e:
+                    logger.error(f"Error during runner cleanup: {str(e)}")
+            
+            # Clean up temporary zip file
+            if temp_zip_path and os.path.exists(temp_zip_path):
+                try:
+                    os.unlink(temp_zip_path)
+                    logger.debug(f"Cleaned up temporary zip file: {temp_zip_path}")
+                except Exception as e:
+                    logger.error(f"Failed to clean up temporary zip file {temp_zip_path}: {str(e)}")
         
         return results
     

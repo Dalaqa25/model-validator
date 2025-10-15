@@ -31,6 +31,7 @@ class ONNXRunner(BaseRunner):
     def __init__(self):
         super().__init__()
         self.framework_name = "ONNX"
+        self.temp_files = []  # Track temporary files for cleanup
         
         if ort is None or onnx is None:
             logger.warning("ONNX Runtime or ONNX not installed. ONNX runner will not be available.")
@@ -83,7 +84,11 @@ class ONNXRunner(BaseRunner):
             # Extract to temporary file
             with tempfile.NamedTemporaryFile(delete=False, suffix='.onnx') as temp_file:
                 temp_file.write(zip_ref.read(onnx_file))
-                return temp_file.name
+                temp_file_path = temp_file.name
+            
+            # Track the temporary file for cleanup
+            self.temp_files.append(temp_file_path)
+            return temp_file_path
     
     def load_model(self, model_path: str) -> bool:
         """
@@ -269,9 +274,30 @@ class ONNXRunner(BaseRunner):
         return validation_result
     
     def cleanup(self):
-        """Clean up resources."""
+        """Clean up resources including temporary files."""
         super().cleanup()
+        
+        # Clean up ONNX runtime resources
         if hasattr(self, 'session'):
-            del self.session
+            try:
+                del self.session
+            except:
+                pass
+        
         if hasattr(self, 'onnx_model'):
-            del self.onnx_model
+            try:
+                del self.onnx_model
+            except:
+                pass
+        
+        # Clean up temporary files
+        for temp_file_path in self.temp_files:
+            try:
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+                    logger.debug(f"Cleaned up temporary file: {temp_file_path}")
+            except Exception as e:
+                logger.error(f"Failed to clean up temporary file {temp_file_path}: {str(e)}")
+        
+        # Clear the temp files list
+        self.temp_files.clear()
