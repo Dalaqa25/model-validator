@@ -84,32 +84,25 @@ async def model_upload(
                     
                     # Pass the original filename to match Next.js pattern
                     storage_result = template_matcher.upload_model_to_storage(
-                        cleaned_contents, 
-                        model_name, 
-                        template_id, 
-                        original_filename=file.filename
+                        cleaned_contents,
+                        model_name,
+                        template_id,
+                        original_filename=file.filename,
+                        task_type=task_type,
+                        framework=framework_used
                     )
                     
-                    if storage_result['upload_success']:
+                    # Record only booleans for frontend consumption
+                    ai_result['upload_success'] = bool(storage_result.get('upload_success'))
+                    ai_result['metadata_saved'] = bool(storage_result.get('db_saved'))
+
+                    if storage_result.get('upload_success'):
                         logger.info(f"Model successfully uploaded to storage: {storage_result['storage_path']}")
-                        # Add comprehensive storage info to AI result (matching Next.js pattern)
-                        ai_result['storage_upload'] = {
-                            "success": True,
-                            "storage_path": storage_result['storage_path'],
-                            "file_storage_info": storage_result['file_storage_info'],  # Complete file metadata
-                            "template_id": template_id
-                        }
                     else:
-                        logger.error(f"Failed to upload model to storage: {storage_result['user_friendly_message']}")
-                        # Update AI result to reflect storage upload failure
+                        logger.error(f"Failed to upload model to storage: {storage_result.get('user_friendly_message')}")
+                        # Keep reason for visibility but do not include storage details object
                         ai_result['status'] = 'INVALID'
-                        ai_result['reason'] = storage_result['user_friendly_message']
-                        ai_result['storage_upload'] = {
-                            "success": False,
-                            "error": storage_result['error'],
-                            "user_friendly_message": storage_result['user_friendly_message'],
-                            "suggestions": storage_result['suggestions']
-                        }
+                        ai_result['reason'] = storage_result.get('user_friendly_message')
                 else:
                     logger.info("Execution testing failed. Skipping storage upload.")
             else:
@@ -128,7 +121,9 @@ async def model_upload(
                 "task_detection": ai_result.get("task_detection", {}),
                 "execution_test": execution_summary,
                 "template_validation": ai_result.get("template_validation"),
-                "storage_upload": ai_result.get("storage_upload")
+                # Only booleans for storage outcome
+                "upload_success": ai_result.get("upload_success"),
+                "metadata_saved": ai_result.get("metadata_saved"),
             }
             try:
                 logger.info("Sending ZIP file and full JSON to 127.0.0.1:8001/upload/")
@@ -145,7 +140,7 @@ async def model_upload(
         else:
             logger.info("AI validation failed. Skipping model execution testing.")
 
-        # Include detected framework, task type, execution results, template validation, and storage upload in the response
+        # Include detected framework, task type, execution results, template validation, and storage outcome in the response
         response = {
             "status": ai_result.get("status"),
             "reason": ai_result.get("reason"),
@@ -153,7 +148,9 @@ async def model_upload(
             "task_detection": ai_result.get("task_detection", {}),
             "execution_test": execution_summary,
             "template_validation": ai_result.get("template_validation"),
-            "storage_upload": ai_result.get("storage_upload")
+            # Storage outcome flags only
+            "upload_success": ai_result.get("upload_success"),
+            "metadata_saved": ai_result.get("metadata_saved"),
         }
         # Remove None values
         response = {k: v for k, v in response.items() if v is not None}

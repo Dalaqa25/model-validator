@@ -136,7 +136,7 @@ class TemplateMatcher:
         
         return result
     
-    def upload_model_to_storage(self, zip_contents: bytes, model_name: str, template_id: str, original_filename: str = None) -> Dict[str, Any]:
+    def upload_model_to_storage(self, zip_contents: bytes, model_name: str, template_id: str, original_filename: str = None, task_type: str = None, framework: str = None) -> Dict[str, Any]:
         """
         Upload the validated model to Supabase storage bucket 'models'.
         Follows the same pattern as the Next.js implementation.
@@ -220,6 +220,9 @@ class TemplateMatcher:
                         "file_storage": file_storage_info,
                         "model_name": model_name,
                         "template_id": template_id,
+                        # Provide fields required by assign_template_id trigger
+                        "task_type": task_type,
+                        "framework": framework,
                     }
                     db_response = self.supabase.table("models").insert(db_payload).execute()
                     # Supabase python client returns an object with .data
